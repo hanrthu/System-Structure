@@ -197,7 +197,8 @@ bool Simulator::FindPlace(int pointer){
             Instructions[pointer].fill = fill;
             stofill = "Load" + std::to_string(fill + 1);
             L.LB[fill].Busy = "Yes";
-            L.LB[fill].Address = std::to_string(stod(Instructions[pointer].Src1));
+            printf("%s\n",Instructions[pointer].Src1.c_str());
+            L.LB[fill].Address = std::to_string(int(stol(Instructions[pointer].Src1,NULL,16)));
         }
     }
 
@@ -205,8 +206,8 @@ bool Simulator::FindPlace(int pointer){
 }
 
 bool Simulator::NotFull(){
-    if(Instructions[Instructions.size()-1].WriteResult != -1)
-        return false;
+    // if(Instructions[Instructions.size()-1].WriteResult != -1)
+    //     return false;
     for(int i = Instructions.size() - 1; i > 0;i--){
         if(Instructions[i].Status == 0)
             return true;
@@ -592,7 +593,7 @@ void Simulator::Tomasolu(){
         Print();
         Cycle += 1;
     }
-    // for(int i = 0; i < 50; i ++){
+    // for(int i = 0; i < 20; i ++){
     //     WriteBack();
     //     TryIssue(IssuePointer);
     //     Exec();
@@ -619,7 +620,7 @@ void Simulator::ShowInstrStatus(){
     printf("Instruction\tdst\tj\tk\tIssue\tExec Comp\tWrite Result\n");
     for(int i = 0; i < Instructions.size();i++){
         printf("%s\t\t%s\t%s\t%s\t%d\t%d\t\t%d\n",Instructions[i].Op.c_str(),Instructions[i].Dst.c_str(),Instructions[i].Src1.c_str(),Instructions[i].Src2.c_str(),Instructions[i].Issue,Instructions[i].ExecComp,Instructions[i].WriteResult);
-        printf("%d  %d\n",Instructions[i].TimeLeft,Instructions[i].Status);
+        // printf("%d  %d\n",Instructions[i].TimeLeft,Instructions[i].Status);
     }
     printf("\n");
 
