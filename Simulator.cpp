@@ -288,27 +288,27 @@ double Simulator::WriteBack(){
                 name = "Load" + std::to_string(Instructions[i].fill + 1);
             }
             if(Instructions[i].Op == "ADD"){
-                double s = stod(RS.Ars[Instructions[i].fill].Vj) + stod(RS.Ars[Instructions[i].fill].Vk);
+                int s = std::stoi(RS.Ars[Instructions[i].fill].Vj) + std::stoi(RS.Ars[Instructions[i].fill].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
             }
             else if(Instructions[i].Op == "SUB"){
-                double s = stod(RS.Ars[Instructions[i].fill].Vj) - stod(RS.Ars[Instructions[i].fill].Vk);
+                int s = std::stoi(RS.Ars[Instructions[i].fill].Vj) - std::stoi(RS.Ars[Instructions[i].fill].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
             }else if(Instructions[i].Op == "MUL"){
-                double s = stod(RS.Mrs[Instructions[i].fill].Vj) * stod(RS.Mrs[Instructions[i].fill].Vk);
+                int s = std::stoi(RS.Mrs[Instructions[i].fill].Vj) * std::stoi(RS.Mrs[Instructions[i].fill].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
             }else if(Instructions[i].Op == "DIV"){
-                double s;
-                if(stod(RS.Mrs[Instructions[i].fill].Vj) == 0)
-                    s = stod(RS.Mrs[Instructions[i].fill].Vj);
+                int s;
+                if(std::stoi(RS.Mrs[Instructions[i].fill].Vj) == 0)
+                    s = std::stoi(RS.Mrs[Instructions[i].fill].Vj);
                 else
-                    s = stod(RS.Mrs[Instructions[i].fill].Vj) / stod(RS.Mrs[Instructions[i].fill].Vk);
+                    s = std::stoi(RS.Mrs[Instructions[i].fill].Vj) / std::stoi(RS.Mrs[Instructions[i].fill].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
@@ -357,16 +357,16 @@ double Simulator::WriteBack(){
         name = "Mrs" + std::to_string(Instructions[i].fill + 1);
         if(i >= 0 && CheckComplete(Instructions[i])){
             if(Instructions[i].Op == "MUL"){
-                double s = stod(RS.Mrs[Instructions[i].fill].Vj) * stod(RS.Mrs[Instructions[i].fill].Vk);
+                int s = std::stoi(RS.Mrs[Instructions[i].fill].Vj) * std::stoi(RS.Mrs[Instructions[i].fill].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
             }else if(Instructions[i].Op == "DIV"){
-                double s;
-                if(stod(RS.Mrs[Instructions[i].fill].Vj) == 0)
-                    s = stod(RS.Mrs[Instructions[i].fill].Vj);
+                int s;
+                if(std::stoi(RS.Mrs[Instructions[i].fill].Vj) == 0)
+                    s = std::stoi(RS.Mrs[Instructions[i].fill].Vj);
                 else
-                    s = stod(RS.Mrs[Instructions[i].fill].Vj) / stod(RS.Mrs[Instructions[i].fill].Vk);
+                    s = std::stoi(RS.Mrs[Instructions[i].fill].Vj) / std::stoi(RS.Mrs[Instructions[i].fill].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
@@ -544,7 +544,7 @@ void Simulator::Exec(){
         int i = RS.Ars[j].Instr;
         Instructions[i].update();
         if(i >= 0 && Instructions[i].TimeLeft == 0 && Instructions[i].Status == 2){
-             Instructions[i].ExecComp = Cycle;
+            Instructions[i].ExecComp = Cycle;
             Instructions[i].done();
             if(Done.size() > 0)
                 Done += ";";
@@ -557,6 +557,8 @@ void Simulator::Exec(){
     for(int j = 0; j < 3;j++){
         int i = RS.Mrs[j].Instr;
         Instructions[i].update();
+        if(i >= 0 && Instructions[i].Status == 2 && Instructions[i].Op == "DIV"&& std::stoi(RS.Mrs[j].Vk) == 0)
+            Instructions[i].TimeLeft = 0;
         if(i >= 0 && Instructions[i].TimeLeft == 0 && Instructions[i].Status == 2){
              Instructions[i].ExecComp = Cycle;
             Instructions[i].done();
@@ -593,7 +595,7 @@ void Simulator::Tomasolu(){
         Print();
         Cycle += 1;
     }
-    // for(int i = 0; i < 20; i ++){
+    // for(int i = 0; i < 45; i ++){
     //     WriteBack();
     //     TryIssue(IssuePointer);
     //     Exec();
