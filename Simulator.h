@@ -99,9 +99,6 @@ public:
     int IsVacant(std::string op,int pointer);
     bool FindPlace(int pointer);
     bool NotFull();
-    // static bool ACompare(int i,int j);
-    // static bool MCompare(int i,int j);
-    // static bool LCompare(int i,int j);
     void Tomasolu();
     void Print();
     void PrintLog();
