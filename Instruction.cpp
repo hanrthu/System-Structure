@@ -41,6 +41,7 @@ Instruction::Instruction(std::string instr){
     Issue = -1;
     ExecComp = -1;
     fill = -1;
+    Count = 0;
     WriteResult = -1;
     // printf("Instruction is: %s,Op:%s,Dst:%s,Src1:%s,Src2:%s,ExecTime:%d,Status:%d\n",instr.c_str(),Op.c_str(),Dst.c_str(),Src1.c_str(),Src2.c_str(),ExecTime,Status);
 }

@@ -13,6 +13,15 @@ public:
     std::string Qk;
     int Instr;
     int Allocate;
+    int TimeLeft;
+    int LogicPoiner;
+    int ExecTime;
+    int Status;
+    void issue();
+    void exec();
+    void update();
+    void done();
+    void writeback();
 };
 class lb{
 public:
@@ -21,6 +30,15 @@ public:
     std::string Address;
     int Instr;
     int Allocate;
+    int ExecTime;
+    int TimeLeft;
+    int Status;
+    int LogicPointer;
+    void issue();
+    void exec();
+    void update();
+    void done();
+    void writeback();
 };
 
 class RStation{
@@ -63,19 +81,27 @@ private:
     FU resource;
 public:
     int Cycle;
+    int CanIssue;
+    int Show;
     std::string filename;
     std::string stofill;
     int IssuePointer;
+    int LogicPointer;
     explicit Simulator();
     bool CheckNumber(std::string s);
-    bool CheckComplete(Instruction instr);
-    void Work(std::string file,std::string log);
+    bool CheckComplete(rs instr);
+    bool CheckLoadComplete(lb instr);
+    void Work(std::string file,std::string log,int show);
     void TryIssue(int pointer);
+    int FindEarliest(std::vector<int> READY,std::string op);
     void Exec();
     void TryExec();
-    int IsVacant(int pointer);
+    int IsVacant(std::string op,int pointer);
     bool FindPlace(int pointer);
     bool NotFull();
+    // static bool ACompare(int i,int j);
+    // static bool MCompare(int i,int j);
+    // static bool LCompare(int i,int j);
     void Tomasolu();
     void Print();
     void PrintLog();

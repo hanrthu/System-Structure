@@ -12,6 +12,34 @@ rs::rs(){
     Qk = "";
     Instr = -1;
     Allocate = -1;
+    Status = 0;
+    TimeLeft = 0;
+}
+void rs::issue(){
+    Status = 1;
+    TimeLeft = ExecTime;
+}
+void rs::exec(){
+    if(Status == 1)
+        Status = 2;
+    else
+        printf("Cannot Exec Not Issued Instruction!\n");
+}
+void rs::update(){
+    if(Status == 2)
+        TimeLeft--;
+}
+void rs::done(){
+    if(Status == 2)
+        Status = 3;
+    else
+        printf("Cannot Done Not Executing Instruction!\n");
+}
+void rs::writeback(){
+    if(Status == 3)
+        Status = 4;
+    else
+        printf("Cannot WriteBack Not Done Instruction!\n");   
 }
 void RStation::Print(){
     printf("Reserved Station Status\n");
@@ -57,6 +85,34 @@ lb::lb(){
     Address = "";
     Instr = -1;
     Allocate = -1;
+    Status = 0;
+    TimeLeft = 0;
+}
+void lb::issue(){
+    Status = 1;
+    TimeLeft = ExecTime;
+}
+void lb::exec(){
+    if(Status == 1)
+        Status = 2;
+    else
+        printf("Cannot Exec Not Issued Instruction!\n");
+}
+void lb::update(){
+    if(Status == 2)
+        TimeLeft--;
+}
+void lb::done(){
+    if(Status == 2)
+        Status = 3;
+    else
+        printf("Cannot Done Not Executing Instruction!\n");
+}
+void lb::writeback(){
+    if(Status == 3)
+        Status = 4;
+    else
+        printf("Cannot WriteBack Not Done Instruction!\n");   
 }
 FU::FU(){
     ld[0] = 0;
@@ -67,37 +123,48 @@ FU::FU(){
     mul[0] = 0;
     mul[1] = 0;
 }
-int Simulator::IsVacant(int pointer){
-    std::string op = Instructions[pointer].Op;
-    if(op == "ADD" || op == "SUB"){
+int Simulator::IsVacant(std::string op,int pointer){
+    int n;
+    if(op == "ADD" || op == "SUB" || op == "JUMP")
+        n= RS.Ars[pointer].Instr;
+    else if(op == "MUL" || op == "DIV")
+        n = RS.Mrs[pointer].Instr;
+    else if(op == "LD")
+        n = L.LB[pointer].Instr;
+    // std::string op = Instructions[n].Op;
+    if(op == "ADD" || op == "SUB" || op == "JUMP"){
         for(int i = 0;i < 3;i++){
             if(resource.add[i] == 0){
                 resource.add[i] = 1;
-                RS.Ars[Instructions[pointer].fill].Allocate = i;
+                RS.Ars[Instructions[n].fill].Allocate = i;
                 return i;
             }
         }
     }else if(op == "MUL" || op == "DIV"){
+        // printf("Resource:%d %d\n",resource.mul[0],resource.mul[1]);
         for(int i = 0;i < 2;i++){
             if(resource.mul[i] == 0){
                 resource.mul[i] = 1;
-                RS.Mrs[Instructions[pointer].fill].Allocate = i;
+                RS.Mrs[Instructions[n].fill].Allocate = i;
                 return i;
             }
         }
     }else if(op == "LD"){
         for(int i = 0;i < 2;i++){
             if(resource.ld[i] == 0){
-                L.LB[Instructions[pointer].fill].Allocate = i;
+                L.LB[Instructions[n].fill].Allocate = i;
                 resource.ld[i] = 1;
                 return i;
             }
         }
     }
+    // printf("HAHAHA\n");
     return -1;
 }
 Simulator::Simulator(){
     IssuePointer = 0;
+    LogicPointer = 0;
+    CanIssue = 1;
     Cycle = 1;
 }
 
@@ -119,7 +186,7 @@ bool Simulator::FindPlace(int pointer){
     if(pointer == -1)
         return false;
     std::string op = Instructions[pointer].Op;
-    if(op == "ADD" || op == "SUB"){
+    if(op == "ADD" || op == "SUB"||op == "JUMP"){
         for(int i = 0;i < 6;i++){
             if(RS.Ars[i].Busy == "No"){
                 fill = i;
@@ -134,6 +201,11 @@ bool Simulator::FindPlace(int pointer){
             stofill = "Ars" + std::to_string(fill + 1);
             RS.Ars[fill].Busy = "Yes";
             RS.Ars[fill].Op = op;
+            RS.Ars[fill].LogicPoiner = LogicPointer;
+            if(op == "ADD" || op == "SUB")
+                RS.Ars[fill].ExecTime = 3;
+            else if(op == "JUMP")
+                RS.Ars[fill].ExecTime = 1;
             //填写第一个源
             if(Instructions[pointer].Src1[0] != 'R'){
                 RS.Ars[fill].Vj = Instructions[pointer].Src1;
@@ -162,10 +234,13 @@ bool Simulator::FindPlace(int pointer){
         if(fill == -1)
             return false;
         else{
+
             Instructions[pointer].fill = fill;
             stofill = "Mrs" + std::to_string(fill + 1);
             RS.Mrs[fill].Busy = "Yes";
             RS.Mrs[fill].Op = op;
+            RS.Mrs[fill].LogicPoiner = LogicPointer;
+            RS.Mrs[fill].ExecTime = 4;
             // printf("%s\n",Instructions[pointer].Src1.substr(1).c_str());
             if(Instructions[pointer].Src1[0] != 'R'){
                 RS.Mrs[fill].Vj = Instructions[pointer].Src1;
@@ -197,7 +272,9 @@ bool Simulator::FindPlace(int pointer){
             Instructions[pointer].fill = fill;
             stofill = "Load" + std::to_string(fill + 1);
             L.LB[fill].Busy = "Yes";
-            printf("%s\n",Instructions[pointer].Src1.c_str());
+            L.LB[fill].LogicPointer = LogicPointer;
+            L.LB[fill].ExecTime = 3;
+            // printf("%s\n",Instructions[pointer].Src1.c_str());
             L.LB[fill].Address = std::to_string(int(stol(Instructions[pointer].Src1,NULL,16)));
         }
     }
@@ -206,11 +283,7 @@ bool Simulator::FindPlace(int pointer){
 }
 
 bool Simulator::NotFull(){
-    // if(Instructions[Instructions.size()-1].WriteResult != -1)
-    //     return false;
     for(int i = Instructions.size() - 1; i > 0;i--){
-        if(Instructions[i].Status == 0)
-            return true;
         if(Instructions[i].Issue == -1)
             return true;
         if(Instructions[i].ExecComp == -1)
@@ -223,29 +296,50 @@ bool Simulator::NotFull(){
 
 
 void Simulator::TryIssue(int pointer){
-    std::string op = Instructions[pointer].Op;
-    if(FindPlace(pointer)){
-        IssuePointer++;
-        IS = Instructions[pointer].Op + ',' + Instructions[pointer].Dst + ',' + Instructions[pointer].Src1;
-        if(Instructions[pointer].Op!="LD")
-            IS += ',' + Instructions[pointer].Src2;
-        if(IssuePointer >= Instructions.size())
-            IssuePointer = -1;
-        Instructions[pointer].issue();
-        Instructions[pointer].Issue = Cycle;
-        R.R[std::stoi(Instructions[pointer].Dst.substr(1))] = stofill;
+    if(CanIssue == 1){
+        std::string op = Instructions[pointer].Op;
+        if(FindPlace(pointer)){
+            Instructions[pointer].Count++;
+            IssuePointer++;
+            LogicPointer++;
+            IS = Instructions[pointer].Op + ',' + Instructions[pointer].Dst + ',' + Instructions[pointer].Src1;
+            if(Instructions[pointer].Op!="LD")
+                IS += ',' + Instructions[pointer].Src2;
+            if(IssuePointer >= Instructions.size())
+                CanIssue = 0;
+            if(Instructions[pointer].Op == "ADD" || Instructions[pointer].Op == "SUB" || Instructions[pointer].Op == "JUMP")
+                RS.Ars[Instructions[pointer].fill].issue();
+            else if(Instructions[pointer].Op == "MUL" || Instructions[pointer].Op == "DIV")
+                RS.Mrs[Instructions[pointer].fill].issue();
+            else if(Instructions[pointer].Op == "LD")
+                L.LB[Instructions[pointer].fill].issue();
+            if( Instructions[pointer].Count == 1)
+                Instructions[pointer].Issue = Cycle;
+            if(Instructions[pointer].Op != "JUMP")
+                R.R[std::stoi(Instructions[pointer].Dst.substr(1))] = stofill;
+            if(Instructions[pointer].Op == "JUMP")
+                CanIssue = 0;
+        }else{
+            IS = "";
+        }
     }else{
         IS = "";
     }
 }
-bool Simulator::CheckComplete(Instruction instr){
+bool Simulator::CheckComplete(rs instr){
     if(instr.Status == 3)
         return true;
     else 
         return false;
 }
+bool Simulator::CheckLoadComplete(lb instr){
+    if(instr.Status == 3)
+        return true;
+    else
+        return false;
+}
 void Simulator::Clean(std::string op,int fill){
-    if(op == "ADD" || op == "SUB"){
+    if(op == "ADD" || op == "SUB"|| op == "JUMP"){
         RS.Ars[fill].Busy = "No";
         RS.Ars[fill].Op = "";
         RS.Ars[fill].Vj = "";
@@ -255,6 +349,9 @@ void Simulator::Clean(std::string op,int fill){
         resource.add[RS.Ars[fill].Allocate] = 0;
         RS.Ars[fill].Instr = -1;
         RS.Ars[fill].Allocate = -1;
+        if(op == "JUMP"){
+            CanIssue = 1;
+        }
     }else if(op == "MUL" || op == "DIV"){
         RS.Mrs[fill].Busy = "No";
         RS.Mrs[fill].Op = "";
@@ -279,68 +376,77 @@ double Simulator::WriteBack(){
     std::string result;
     for(int j = 0;j < 6;j++){
         int i = RS.Ars[j].Instr;
-        if(i >= 0 && CheckComplete(Instructions[i])){
-            if(Instructions[i].Op == "ADD" ||Instructions[i].Op == "SUB"){
-                name = "Ars" + std::to_string(Instructions[i].fill + 1);
+        if(i >= 0 && CheckComplete(RS.Ars[j])){
+            if(Instructions[i].Op == "ADD" ||Instructions[i].Op == "SUB"||Instructions[i].Op == "JUMP"){
+                name = "Ars" + std::to_string(j + 1);
             }else if(Instructions[i].Op == "MUL" || Instructions[i].Op == "DIV"){
-                name = "Mrs" + std::to_string(Instructions[i].fill + 1);
+                name = "Mrs" + std::to_string(j + 1);
             }else if(Instructions[i].Op == "LD"){
-                name = "Load" + std::to_string(Instructions[i].fill + 1);
+                name = "Load" + std::to_string(j + 1);
             }
             if(Instructions[i].Op == "ADD"){
-                int s = std::stoi(RS.Ars[Instructions[i].fill].Vj) + std::stoi(RS.Ars[Instructions[i].fill].Vk);
+                int s = std::stoi(RS.Ars[j].Vj) + std::stoi(RS.Ars[j].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
             }
             else if(Instructions[i].Op == "SUB"){
-                int s = std::stoi(RS.Ars[Instructions[i].fill].Vj) - std::stoi(RS.Ars[Instructions[i].fill].Vk);
+                int s = std::stoi(RS.Ars[j].Vj) - std::stoi(RS.Ars[j].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
+            }else if(Instructions[i].Op == "JUMP"){
+                // printf("I am Jumping!\n");
+                // printf("IssuePointer:%d\n",IssuePointer);
+                if(int(std::stol(Instructions[i].Dst,NULL,16)) == int(std::stol(RS.Ars[j].Vj))){
+                    result = std::to_string((std::stol(RS.Ars[j].Vk,NULL,16)));
+                    IssuePointer += ( -1 + int(std::stol(RS.Ars[j].Vk,NULL,16)));
+                    // printf("IssuePointer:%d %d\n",IssuePointer,int(std::stol(RS.Ars[j].Vk,NULL,16)));
+                }
             }else if(Instructions[i].Op == "MUL"){
-                int s = std::stoi(RS.Mrs[Instructions[i].fill].Vj) * std::stoi(RS.Mrs[Instructions[i].fill].Vk);
+                int s = std::stoi(RS.Mrs[j].Vj) * std::stoi(RS.Mrs[j].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
             }else if(Instructions[i].Op == "DIV"){
                 int s;
-                if(std::stoi(RS.Mrs[Instructions[i].fill].Vj) == 0)
-                    s = std::stoi(RS.Mrs[Instructions[i].fill].Vj);
+                if(std::stoi(RS.Mrs[j].Vk) == 0)
+                    s = std::stoi(RS.Mrs[j].Vj);
                 else
-                    s = std::stoi(RS.Mrs[Instructions[i].fill].Vj) / std::stoi(RS.Mrs[Instructions[i].fill].Vk);
+                    s = std::stoi(RS.Mrs[j].Vj) / std::stoi(RS.Mrs[j].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
 
             }else if(Instructions[i].Op == "LD"){
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name){
-                    R.R[std::stoi(Instructions[i].Dst.substr(1))] = L.LB[Instructions[i].fill].Address;
+                    R.R[std::stoi(Instructions[i].Dst.substr(1))] = L.LB[j].Address;
                 }
-                result = L.LB[Instructions[i].fill].Address;
+                result = L.LB[j].Address;
             }else{
                 printf("Unknown Operation!\n");
             }
-            Instructions[i].writeback();
-            Instructions[i].WriteResult = Cycle;
-            for(int i = 0;i < 6;i++){
-                if(RS.Ars[i].Qj == name){
-                    RS.Ars[i].Qj = "";
-                    RS.Ars[i].Vj = result;
+            RS.Ars[j].writeback();
+            if(Instructions[i].Count == 1)
+                Instructions[i].WriteResult = Cycle;
+            for(int k = 0;k < 6;k++){
+                if(RS.Ars[k].Qj == name){
+                    RS.Ars[k].Qj = "";
+                    RS.Ars[k].Vj = result;
                 }
-                if(RS.Ars[i].Qk == name){
-                    RS.Ars[i].Qk = "";
-                    RS.Ars[i].Vk = result;
+                if(RS.Ars[k].Qk == name){
+                    RS.Ars[k].Qk = "";
+                    RS.Ars[k].Vk = result;
                 }
             }
-            for(int i = 0;i < 3; i++){
-                if(RS.Mrs[i].Qj == name){
-                    RS.Mrs[i].Qj = "";
-                    RS.Mrs[i].Vj = result;
+            for(int k = 0;k < 3; k++){
+                if(RS.Mrs[k].Qj == name){
+                    RS.Mrs[k].Qj = "";
+                    RS.Mrs[k].Vj = result;
                 }
-                if(RS.Mrs[i].Qk == name){
-                    RS.Mrs[i].Qk = "";
-                    RS.Mrs[i].Vk = result;
+                if(RS.Mrs[k].Qk == name){
+                    RS.Mrs[k].Qk = "";
+                    RS.Mrs[k].Vk = result;
                 }
             }
             if(WB.size() > 0)
@@ -349,48 +455,49 @@ double Simulator::WriteBack(){
             if(Instructions[i].Op != "LD"){
                 WB += "," + Instructions[i].Src2;
             }
-            Clean(Instructions[i].Op,Instructions[i].fill);
+            Clean(Instructions[i].Op,j);
         }
     }
     for(int j = 0; j < 3; j++ ){
         int i = RS.Mrs[j].Instr;
-        name = "Mrs" + std::to_string(Instructions[i].fill + 1);
-        if(i >= 0 && CheckComplete(Instructions[i])){
+        name = "Mrs" + std::to_string(j + 1);
+        if(i >= 0 && CheckComplete(RS.Mrs[j])){
             if(Instructions[i].Op == "MUL"){
-                int s = std::stoi(RS.Mrs[Instructions[i].fill].Vj) * std::stoi(RS.Mrs[Instructions[i].fill].Vk);
+                int s = std::stoi(RS.Mrs[j].Vj) * std::stoi(RS.Mrs[j].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
             }else if(Instructions[i].Op == "DIV"){
                 int s;
-                if(std::stoi(RS.Mrs[Instructions[i].fill].Vj) == 0)
-                    s = std::stoi(RS.Mrs[Instructions[i].fill].Vj);
+                if(std::stoi(RS.Mrs[j].Vk) == 0)
+                    s = std::stoi(RS.Mrs[j].Vj);
                 else
-                    s = std::stoi(RS.Mrs[Instructions[i].fill].Vj) / std::stoi(RS.Mrs[Instructions[i].fill].Vk);
+                    s = std::stoi(RS.Mrs[j].Vj) / std::stoi(RS.Mrs[j].Vk);
                 result = std::to_string(s);
                 if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name)
                     R.R[std::stoi(Instructions[i].Dst.substr(1))] = result;
             }
-            Instructions[i].writeback();
-            Instructions[i].WriteResult = Cycle;
-            for(int i = 0;i < 6;i++){
-                if(RS.Ars[i].Qj == name){
-                    RS.Ars[i].Qj = "";
-                    RS.Ars[i].Vj = result;
+            RS.Mrs[j].writeback();
+            if(Instructions[i].Count == 1)
+                Instructions[i].WriteResult = Cycle;
+            for(int k = 0;k < 6;k++){
+                if(RS.Ars[k].Qj == name){
+                    RS.Ars[k].Qj = "";
+                    RS.Ars[k].Vj = result;
                 }
-                if(RS.Ars[i].Qk == name){
-                    RS.Ars[i].Qk = "";
-                    RS.Ars[i].Vk = result;
+                if(RS.Ars[k].Qk == name){
+                    RS.Ars[k].Qk = "";
+                    RS.Ars[k].Vk = result;
                 }
             }
-            for(int i = 0;i < 3; i++){
-                if(RS.Mrs[i].Qj == name){
-                    RS.Mrs[i].Qj = "";
-                    RS.Mrs[i].Vj = result;
+            for(int k = 0;k < 3; k++){
+                if(RS.Mrs[k].Qj == name){
+                    RS.Mrs[k].Qj = "";
+                    RS.Mrs[k].Vj = result;
                 }
-                if(RS.Mrs[i].Qk == name){
-                    RS.Mrs[i].Qk = "";
-                    RS.Mrs[i].Vk = result;
+                if(RS.Mrs[k].Qk == name){
+                    RS.Mrs[k].Qk = "";
+                    RS.Mrs[k].Vk = result;
                 }
             }
             if(WB.size() > 0)
@@ -399,49 +506,85 @@ double Simulator::WriteBack(){
             if(Instructions[i].Op != "LD"){
                 WB += "," + Instructions[i].Src2;
             }
-            Clean(Instructions[i].Op,Instructions[i].fill);
+            Clean(Instructions[i].Op,j);
         }
     }
     for(int j = 0; j < 3; j++ ){
         int i = L.LB[j].Instr;
-        name = "Load" + std::to_string(Instructions[i].fill + 1);
-        if(i >= 0 && CheckComplete(Instructions[i])){
+        name = "Load" + std::to_string(j + 1);
+        if(i >= 0 && CheckLoadComplete(L.LB[j])){
             if(R.R[std::stoi(Instructions[i].Dst.substr(1))] == name){
-                R.R[std::stoi(Instructions[i].Dst.substr(1))] = L.LB[Instructions[i].fill].Address;
+                R.R[std::stoi(Instructions[i].Dst.substr(1))] = L.LB[j].Address;
             }
-            result = L.LB[Instructions[i].fill].Address;
-            Instructions[i].writeback();
+            result = L.LB[j].Address;
+            L.LB[j].writeback();
+            if(Instructions[i].Count == 1)
                 Instructions[i].WriteResult = Cycle;
-                for(int i = 0;i < 6;i++){
-                    if(RS.Ars[i].Qj == name){
-                        RS.Ars[i].Qj = "";
-                        RS.Ars[i].Vj = result;
-                    }
-                    if(RS.Ars[i].Qk == name){
-                        RS.Ars[i].Qk = "";
-                        RS.Ars[i].Vk = result;
-                    }
+            // printf("Hello World!\n");
+            for(int k = 0;k < 6;k++){
+                if(RS.Ars[k].Qj == name){
+                    RS.Ars[k].Qj = "";
+                    RS.Ars[k].Vj = result;
                 }
-                for(int i = 0;i < 3; i++){
-                    if(RS.Mrs[i].Qj == name){
-                        RS.Mrs[i].Qj = "";
-                        RS.Mrs[i].Vj = result;
-                    }
-                    if(RS.Mrs[i].Qk == name){
-                        RS.Mrs[i].Qk = "";
-                        RS.Mrs[i].Vk = result;
-                    }
+                if(RS.Ars[k].Qk == name){
+                    RS.Ars[k].Qk = "";
+                    RS.Ars[k].Vk = result;
                 }
-                if(WB.size() > 0)
-                    WB += ";";
-                WB += Instructions[i].Op + "," + Instructions[i].Dst + "," + Instructions[i].Src1;
-                if(Instructions[i].Op != "LD"){
-                    WB += "," + Instructions[i].Src2;
+            }
+            for(int k = 0;k < 3; k++){
+                if(RS.Mrs[k].Qj == name){
+                    RS.Mrs[k].Qj = "";
+                    RS.Mrs[k].Vj = result;
                 }
-                Clean(Instructions[i].Op,Instructions[i].fill);
+                if(RS.Mrs[k].Qk == name){
+                    RS.Mrs[k].Qk = "";
+                    RS.Mrs[k].Vk = result;
+                }
+            }
+            if(WB.size() > 0)
+                WB += ";";
+            WB += Instructions[i].Op + "," + Instructions[i].Dst + "," + Instructions[i].Src1;
+            if(Instructions[i].Op != "LD"){
+                WB += "," + Instructions[i].Src2;
+            }
+            Clean(Instructions[i].Op,j);
         }
     }
     return 1.0;
+}
+// bool Simulator::ACompare(int a,int b){
+//     return RS.Ars[a].LogicPoiner < RS.Ars[b].LogicPoiner;
+// }
+// bool Simulator::MCompare(int a,int b){
+//     return RS.Mrs[a].LogicPoiner < RS.Mrs[b].LogicPoiner;
+// }
+// bool Simulator::LCompare(int a,int b){
+//      return L.LB[a].LogicPointer < L.LB[b].LogicPointer;
+// }
+int Simulator::FindEarliest(std::vector<int> READY,std::string op){
+    int min = 100000000;
+    int index = -1;
+    for(int i = 0; i < READY.size();i++){
+        if(READY[i] != -1){
+            if(op == "ADD"){
+                if(RS.Ars[READY[i]].LogicPoiner < min){
+                    min = RS.Ars[READY[i]].LogicPoiner;
+                    index = i;
+                }
+            }else if(op == "MUL"){
+                if(RS.Mrs[READY[i]].LogicPoiner < min){
+                    min = RS.Mrs[READY[i]].LogicPoiner;
+                    index = i;
+                }
+            }else if(op == "LD"){
+                if(L.LB[READY[i]].LogicPointer < min){
+                    min = L.LB[READY[i]].LogicPointer;
+                    index = i;
+                }
+            }
+        }
+    }
+    return index;
 }
 void Simulator::TryExec(){
     std::vector<int> ADDReady;
@@ -465,87 +608,86 @@ void Simulator::TryExec(){
         int i = RS.Ars[j].Instr;
         // printf("Ars I is :%d\n",i);
         int contain = 0;
-        if(i >= 0 && RS.Ars[j].Vj != "" && RS.Ars[j].Vk !="" && Instructions[i].Status == 1){
+        if(i >= 0 && RS.Ars[j].Vj != "" && RS.Ars[j].Vk !="" && RS.Ars[j].Status == 1){
             for(int k = 0; k < ADDReady.size();k++)
-                if(ADDReady[k] == i)
+                if(ADDReady[k] == j)
                     contain = 1;
             if(contain == 0)
-                ADDReady.push_back(i);
+                ADDReady.push_back(j);
         }
     }
     for(int j = 0; j < 3;j++){
         int i = RS.Mrs[j].Instr;
         int contain = 0;
         // printf("Mrs I is :%d\n",i);
-        if(i >= 0 && RS.Mrs[j].Vj != "" && RS.Mrs[j].Vk !="" && Instructions[i].Status == 1){
+        if(i >= 0 && RS.Mrs[j].Vj != "" && RS.Mrs[j].Vk !="" && RS.Mrs[j].Status == 1){
             for(int k = 0; k < MULReady.size();k++)
-                if(MULReady[k] == i)
+                if(MULReady[k] == j)
                     contain = 1;
             if(contain == 0)
-                MULReady.push_back(i);
+                MULReady.push_back(j);
         }
     }
     for(int j = 0; j < 3;j++){
         int i = L.LB[j].Instr;
         int contain = 0;
         // printf("LD I is :%d\n",i);
-        if(i >= 0 && Instructions[i].Issue != -1&& Instructions[i].Status == 1){
+        if(i >= 0 && L.LB[j].Status == 1){
             for(int k = 0; k < LDReady.size();k++)
-                if(LDReady[k] == i)
+                if(LDReady[k] == j)
                     contain = 1;
             if(contain == 0)
-                LDReady.push_back(i);
+                LDReady.push_back(j);
         }
     }
     std::sort(ADDReady.begin(), ADDReady.end());
     std::sort(MULReady.begin(),MULReady.end());
     std::sort(LDReady.begin(),LDReady.end());
     for(int i = 0; i < ADDReady.size();i++){
-        if(IsVacant(ADDReady[i])!= -1){
-            Instructions[ADDReady[i]].exec();
+        int earliest = FindEarliest(ADDReady,"ADD");
+        if(IsVacant(RS.Ars[ADDReady[earliest]].Op,ADDReady[earliest])!= -1){
+            RS.Ars[ADDReady[earliest]].exec();
             if(Ready.size() > 0)
                 Ready += ";";
-            Ready += Instructions[ADDReady[i]].Op + "," + Instructions[ADDReady[i]].Dst + "," + Instructions[ADDReady[i]].Src1 + "," + Instructions[ADDReady[i]].Src2;
+            int n = RS.Ars[ADDReady[earliest]].Instr;
+            Ready += Instructions[n].Op + "," + Instructions[n].Dst + "," + Instructions[n].Src1 + "," + Instructions[n].Src2;
         }
+        ADDReady[earliest] = -1;
     }
     for(int j = 0; j < MULReady.size();j++){
-        if(IsVacant(MULReady[j]) != -1){
-            Instructions[MULReady[j]].exec();
+        // printf("MULREADY:%d\n",MULReady.size());
+        int earliest = FindEarliest(MULReady,"MUL");
+        if(IsVacant(RS.Mrs[MULReady[earliest]].Op,MULReady[earliest]) != -1){
+            RS.Mrs[MULReady[earliest]].exec();
             if(Ready.size() > 0)
                 Ready += ";";
-            Ready += Instructions[MULReady[j]].Op + "," + Instructions[MULReady[j]].Dst + "," + Instructions[MULReady[j]].Src1 + "," + Instructions[MULReady[j]].Src2;
+            int n = RS.Mrs[MULReady[earliest]].Instr;
+            Ready += Instructions[n].Op + "," + Instructions[n].Dst + "," + Instructions[n].Src1 + "," + Instructions[n].Src2;
         }
+        MULReady[earliest] = -1;
     }
     for(int k = 0; k < LDReady.size();k++){
-        if(IsVacant(LDReady[k]) != -1){
-            Instructions[LDReady[k]].exec();
+        int earliest = FindEarliest(LDReady,"LD");
+        if(IsVacant("LD",LDReady[earliest]) != -1){
+            L.LB[LDReady[earliest]].exec();
+            // Instructions[LDReady[k]].exec();
             if(Ready.size() > 0)
                 Ready += ";";
-            Ready += Instructions[LDReady[k]].Op + "," + Instructions[LDReady[k]].Dst + "," + Instructions[LDReady[k]].Src1;
+            int n = L.LB[LDReady[earliest]].Instr;
+            Ready += Instructions[n].Op + "," + Instructions[n].Dst + "," + Instructions[n].Src1;
         }
+        LDReady[earliest] = -1;
     }
 }
 void Simulator::Exec(){
     Done = "";
-    // for(int i = 0; i < Instructions.size();i++){
-    //     Instructions[i].update();
-    //     if(Instructions[i].TimeLeft == 0 && Instructions[i].Status == 2){
-    //         Instructions[i].ExecComp = Cycle;
-    //         Instructions[i].done();
-    //         if(Done.size() > 0)
-    //             Done += ";";
-    //         Done += Instructions[i].Op + "," + Instructions[i].Dst + "," + Instructions[i].Src1;
-    //         if(Instructions[i].Op != "LD"){
-    //             Done += "," + Instructions[i].Src2;
-    //         }
-    //     }
-    // }
     for(int j = 0; j < 6;j++){
         int i = RS.Ars[j].Instr;
-        Instructions[i].update();
-        if(i >= 0 && Instructions[i].TimeLeft == 0 && Instructions[i].Status == 2){
-            Instructions[i].ExecComp = Cycle;
-            Instructions[i].done();
+        RS.Ars[j].update();
+        if(i >= 0 && RS.Ars[j].TimeLeft == 0 && RS.Ars[j].Status == 2){
+            if(Instructions[i].Count == 1)
+                Instructions[i].ExecComp = Cycle;
+            RS.Ars[j].done();
             if(Done.size() > 0)
                 Done += ";";
             Done += Instructions[i].Op + "," + Instructions[i].Dst + "," + Instructions[i].Src1;
@@ -556,12 +698,13 @@ void Simulator::Exec(){
     }
     for(int j = 0; j < 3;j++){
         int i = RS.Mrs[j].Instr;
-        Instructions[i].update();
-        if(i >= 0 && Instructions[i].Status == 2 && Instructions[i].Op == "DIV"&& std::stoi(RS.Mrs[j].Vk) == 0)
-            Instructions[i].TimeLeft = 0;
-        if(i >= 0 && Instructions[i].TimeLeft == 0 && Instructions[i].Status == 2){
-             Instructions[i].ExecComp = Cycle;
-            Instructions[i].done();
+        RS.Mrs[j].update();
+        if(i >= 0 && RS.Mrs[j].Status == 2 && RS.Mrs[j].Op == "DIV"&& std::stoi(RS.Mrs[j].Vk) == 0)
+            RS.Mrs[j].TimeLeft = 0;
+        if(i >= 0 && RS.Mrs[j].TimeLeft == 0 && RS.Mrs[j].Status == 2){
+            if(Instructions[i].Count == 1)
+                Instructions[i].ExecComp = Cycle;
+            RS.Mrs[j].done();
             if(Done.size() > 0)
                 Done += ";";
             Done += Instructions[i].Op + "," + Instructions[i].Dst + "," + Instructions[i].Src1;
@@ -572,10 +715,11 @@ void Simulator::Exec(){
     }
     for(int j = 0; j < 3;j++){
         int i = L.LB[j].Instr;
-        Instructions[i].update();
-        if(i >=0 && Instructions[i].TimeLeft == 0 && Instructions[i].Status == 2){
-            Instructions[i].ExecComp = Cycle;
-            Instructions[i].done();
+        L.LB[j].update();
+        if(i >=0 && L.LB[j].TimeLeft == 0 && L.LB[j].Status == 2){
+            if(Instructions[i].Count == 1)
+                Instructions[i].ExecComp = Cycle;
+            L.LB[j].done();
             if(Done.size() > 0)
                 Done += ";";
             Done += Instructions[i].Op + "," + Instructions[i].Dst + "," + Instructions[i].Src1;
@@ -589,13 +733,19 @@ void Simulator::Exec(){
 void Simulator::Tomasolu(){
     while(NotFull()){
         WriteBack();
+        if(!NotFull()){
+            if(Show == 1)
+                Print();
+            break;
+        }
         TryIssue(IssuePointer);
         Exec();
         TryExec();
-        Print();
+        if(Show == 1)
+            Print();
         Cycle += 1;
     }
-    // for(int i = 0; i < 45; i ++){
+    // for(int i = 0; i < 70; i ++){
     //     WriteBack();
     //     TryIssue(IssuePointer);
     //     Exec();
@@ -604,7 +754,7 @@ void Simulator::Tomasolu(){
     //     Cycle += 1;
     // }
 }
-void Simulator::Work(std::string file,std::string log){
+void Simulator::Work(std::string file,std::string log,int show){
     filename = log;
     std::string line;
     int count = 0;
@@ -614,6 +764,7 @@ void Simulator::Work(std::string file,std::string log){
         Instructions.push_back(I);
         count += 1;
     }
+    Show = show;
     Tomasolu();
     PrintLog();
     Cycle += 1;
@@ -622,8 +773,11 @@ void Simulator::ShowInstrStatus(){
     printf("Instruction\tdst\tj\tk\tIssue\tExec Comp\tWrite Result\n");
     for(int i = 0; i < Instructions.size();i++){
         printf("%s\t\t%s\t%s\t%s\t%d\t%d\t\t%d\n",Instructions[i].Op.c_str(),Instructions[i].Dst.c_str(),Instructions[i].Src1.c_str(),Instructions[i].Src2.c_str(),Instructions[i].Issue,Instructions[i].ExecComp,Instructions[i].WriteResult);
-        // printf("%d  %d\n",Instructions[i].TimeLeft,Instructions[i].Status);
     }
+    // for(int i = 0; i < 6;i++)
+    //     printf("%d  %d %d\n",RS.Ars[i].TimeLeft,RS.Ars[i].Status,Instructions[i].Count);
+    // for(int j = 0; j < 3;j++)
+    //     printf("%d  %d %d\n",RS.Mrs[j].TimeLeft,RS.Mrs[j].Status,Instructions[j].Count);
     printf("\n");
 
 }
@@ -639,7 +793,7 @@ void Simulator::Print(){
     R.Print();
 }
 void Simulator::PrintLog(){
-    std::ofstream out("./Log2/2016010189_" +  filename);
+    std::ofstream out("./Log/2016010189_" +  filename);
     for(int i = 0; i < Instructions.size();i++){
         out << Instructions[i].Issue << " " << Instructions[i].ExecComp << " " << Instructions[i].WriteResult << std::endl;
     }

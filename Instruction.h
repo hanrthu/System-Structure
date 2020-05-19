@@ -13,6 +13,7 @@ public:
     int Issue;
     int ExecComp;
     int WriteResult;
+    int Count;
     int fill;
     explicit Instruction(std::string instr);
     void issue();
